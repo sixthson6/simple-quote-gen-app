@@ -1,0 +1,59 @@
+name: Java CI/CD to Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17' # Change to your Java version
+
+      - name: Build with Maven
+        run: |
+          # Package the application as a JAR file
+          mvn clean package -DskipTests
+
+      - name: Create deployment package
+        run: |
+          # Create a folder for Elastic Beanstalk deployment
+          mkdir deploy
+          # The artifact name depends on your pom.xml <artifactId> and <version>
+          cp target/*.jar ./deploy/application.jar
+          # Zip the deployment folder. Beanstalk expects a .zip file.
+          zip -r deploy.zip ./deploy
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload to S3
+        run: |
+          # Get a version label based on the commit SHA
+          VERSION_LABEL=$(echo $GITHUB_SHA | cut -c1-7)
+          # Upload the zip file to S3
+          aws s3 cp deploy.zip s3://${{ secrets.AWS_S3_BUCKET }}/application-v${VERSION_LABEL}.zip
+
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v22
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: ${{ secrets.EB_APPLICATION_NAME }}
+          environment_name: ${{ secrets.EB_ENVIRONMENT_NAME }}
+          version_label: ${{ github.sha }}
+          region: ${{ secrets.AWS_REGION }}
+          existing_bucket_name: ${{ secrets.AWS_S3_BUCKET }}
+          deployment_package: deploy.zip
