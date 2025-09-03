@@ -57,3 +57,21 @@ jobs:
           region: ${{ secrets.AWS_REGION }}
           existing_bucket_name: ${{ secrets.AWS_S3_BUCKET }}
           deployment_package: deploy.zip
+
+      - name: Download and Display Logs
+        # The `if: failure()` ensures this step only runs if a previous step failed.
+        if: failure()
+        run: |
+          # Use the AWS CLI to request logs from the environment
+          aws elasticbeanstalk request-environment-info --environment-name simple-quote-gen-app-env --info-type tail
+          sleep 15
+          # Download the logs and save them to a file
+          aws elasticbeanstalk retrieve-environment-info --application-name simple-quote-gen-app --environment-name simple-quote-gen-app-env --info-type tail --output text > eb-logs.txt
+          echo "================================================="
+          echo "Elastic Beanstalk Application Logs:"
+          echo "================================================="
+          # Print the contents of the log file to the GitHub Actions console
+          cat eb-logs.txt
+          echo "================================================="
+          echo "End of Logs"
+          echo "================================================="
