@@ -58,6 +58,22 @@ jobs:
           existing_bucket_name: ${{ secrets.AWS_S3_BUCKET }}
           deployment_package: deploy.zip
 
+      - name: Wait for Environment to Stabilize
+        if: failure()
+        run: |
+          # Wait up to 5 minutes for the environment to become stable.
+          for i in $(seq 1 30); do
+            STATUS=$(aws elasticbeanstalk describe-environments --application-name simple-quote-gen-app --environment-names simple-quote-gen-app-env --query "Environments[0].HealthStatus" --output text)
+            if [ "$STATUS" == "Green" ] || [ "$STATUS" == "Red" ]; then
+              echo "Environment is stable with health status: $STATUS. Proceeding to get logs."
+              exit 0
+            fi
+            echo "Environment is not yet stable. Current status: $STATUS. Waiting 10 seconds..."
+            sleep 10
+          done
+          echo "Timeout waiting for environment to become stable. Proceeding to get logs anyway."
+          exit 0
+
       - name: Download and Display Logs
         # The `if: failure()` ensures this step only runs if a previous step failed.
         if: failure()
